@@ -88,6 +88,7 @@ def raise_for_error(response):
             else:
                 raise MixpanelError(error)
         except (ValueError, TypeError):
+            LOGGER.error(response.text)
             raise MixpanelError(error)
 
 

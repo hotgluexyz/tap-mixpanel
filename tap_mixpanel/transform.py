@@ -2,8 +2,7 @@ import datetime
 import pytz
 import singer
 from singer.utils import strftime
-
-from tap_mixpanel.utils import convert_to_snakecase
+import re
 
 LOGGER = singer.get_logger()
 
@@ -27,6 +26,10 @@ def denest_properties(record, properties_node, keep_original_properties=None, de
             new_record.pop(properties_node, None)
 
     return new_record
+
+
+def convert_to_snakecase(string):
+    return re.sub(r'\W+', '_', string).lower()
 
 
 # Time conversion from $time integer using project_timezone

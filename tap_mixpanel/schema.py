@@ -4,7 +4,7 @@ from singer import metadata
 from tap_mixpanel.streams import STREAMS
 import singer
 
-from tap_mixpanel.utils import convert_to_snakecase
+from tap_mixpanel.transform import convert_to_snakecase
 
 LOGGER = singer.get_logger()
 

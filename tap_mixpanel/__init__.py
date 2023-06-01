@@ -73,6 +73,9 @@ def main():
             'denest_properties_snakecase': config.get('denest_properties_snakecase', 'false')
         }
 
+        if str(denest_properties_config['denest_properties_snakecase']).lower() == 'true':
+            LOGGER.info('denest_properties_config %s', denest_properties_config)
+
         if parsed_args.discover:
             do_discover(client, properties_flag, denest_properties_config)
         elif parsed_args.catalog:

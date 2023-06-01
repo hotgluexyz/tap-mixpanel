@@ -111,6 +111,7 @@ More details may be found in the [Mixpanel API Authentication](https://developer
    - `project_timezone` (string like `US/Pacific`): Time zone in which integer date times are stored. The project timezone may be found in the project settings in the Mixpanel console. [More info about timezones](https://help.mixpanel.com/hc/en-us/articles/115004547203-Manage-Timezones-for-Projects-in-Mixpanel). 
    - `select_properties_by_default` (`true` or `false`): Mixpanel properties are not fixed and depend on the date being uploaded. During Discovery mode and catalog.json setup, all current/existing properties will be captured. Setting this config parameter to true ensures that new properties on events and engage records are captured. Otherwise new properties will be ignored.
    - `denest_properties` (`true` or `false`): To denest large and nested JSON Mixpanel responses in the `extract` and `engage` streams. To avoid very wide schema you can disable the denesting feature and the original JSON response will be sent in the RECORD message as plain object. Default `denest_properties` is `true`.
+   - `denest_properties_snakecase` (`true` or `false`): To convert all the denest fields names to snake case and lower case (e.g. `Key 1 > #1` to `key_1_1`). Default `denest_properties_snakecase` is `false`.
 
     ```json
     {
@@ -120,6 +121,7 @@ More details may be found in the [Mixpanel API Authentication](https://developer
         "project_timezone": "US/Pacific",
         "select_properties_by_default": "true",
         "denest_properties": "true",
+        "denest_properties_snakecase": "false",
         "start_date": "2019-01-01T00:00:00Z",
         "user_agent": "tap-mixpanel <api_user_email@your_company.com>"
     }

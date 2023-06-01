@@ -4,6 +4,8 @@ from singer import metadata
 from tap_mixpanel.streams import STREAMS
 import singer
 
+from tap_mixpanel.utils import convert_to_snakecase
+
 LOGGER = singer.get_logger()
 
 # Reference:
@@ -13,7 +15,7 @@ def get_abs_path(path):
     return os.path.join(os.path.dirname(os.path.realpath(__file__)), path)
 
 
-def get_schema(client, properties_flag, denest_properties_flag, stream_name):
+def get_schema(client, properties_flag, denest_properties_config, stream_name):
     schema_path = get_abs_path('schemas/{}.json'.format(stream_name))
 
     with open(schema_path) as file:
@@ -30,7 +32,7 @@ def get_schema(client, properties_flag, denest_properties_flag, stream_name):
         schema['additionalProperties'] = False
 
     # Denest properties only when it's required
-    if str(denest_properties_flag).lower() == 'true':
+    if str(denest_properties_config['denest_properties']).lower() == 'true':
         # Remove properties from the schema, we'll denest it
         if stream_name in ['engage', 'export']:
             schema['properties'].pop('properties', None)
@@ -49,6 +51,8 @@ def get_schema(client, properties_flag, denest_properties_flag, stream_name):
                         new_key = 'mp_reserved_{}'.format(key[1:])
                     else:
                         new_key = key
+                    if denest_properties_config['denest_properties_snakecase']:
+                        new_key = convert_to_snakecase(new_key)
 
                     # Defaults
                     this_type = ['null', 'string']
@@ -105,6 +109,8 @@ def get_schema(client, properties_flag, denest_properties_flag, stream_name):
                     new_key = 'mp_reserved_{}'.format(key[1:])
                 else:
                     new_key = key
+                if denest_properties_config['denest_properties_snakecase']:
+                    new_key = convert_to_snakecase(new_key)
 
                 # string ONLY for event properties (no other datatypes)
                 # Reference: https://help.mixpanel.com/hc/en-us/articles/360001355266-Event-Properties#field-size-character-limits-for-event-properties
@@ -121,7 +127,7 @@ def get_schema(client, properties_flag, denest_properties_flag, stream_name):
 
     return schema
 
-def get_schemas(client, properties_flag, denest_properties_flag):
+def get_schemas(client, properties_flag, denest_properties_config):
     schemas = {}
     field_metadata = {}
 
@@ -131,7 +137,7 @@ def get_schemas(client, properties_flag, denest_properties_flag):
             LOGGER.warning('Mixpanel returned a 402 indicating the Engage endpoint and stream is unavailable. Skipping.')
             continue
 
-        schema = get_schema(client, properties_flag, denest_properties_flag, stream_name)
+        schema = get_schema(client, properties_flag, denest_properties_config, stream_name)
 
         schemas[stream_name] = schema
         mdata = metadata.new()

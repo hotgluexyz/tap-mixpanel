@@ -132,7 +132,8 @@ def sync_endpoint(client, #pylint: disable=too-many-branches
                   days_interval=None,
                   attribution_window=None,
                   export_events=None,
-                  denest_properties_flag=None):
+                  denest_properties_flag=None,
+                  denest_properties_snakecase=None):
 
     # Get endpoint_config fields
     url = endpoint_config.get('url')
@@ -286,8 +287,8 @@ def sync_endpoint(client, #pylint: disable=too-many-branches
                     for record in data:
                         if record and str(record) != '':
                             # transform reocord and append to transformed_data array
-                            transformed_record = transform_record(record, stream_name, \
-                                project_timezone, denest_properties_flag)
+                            transformed_record = transform_record(record, stream_name,
+                                project_timezone, denest_properties_flag, denest_properties_snakecase)
                             transformed_data.append(transformed_record)
 
                             # Check for missing keys
@@ -536,7 +537,8 @@ def sync(client, config, catalog, state, start_date):
             days_interval=int(config.get('date_window_size', '30')),
             attribution_window=int(config.get('attribution_window', '5')),
             export_events=config.get('export_events'),
-            denest_properties_flag=config.get('denest_properties', 'true')
+            denest_properties_flag=config.get('denest_properties', 'true'),
+            denest_properties_snakecase=config.get('denest_properties_snakecase', 'false')
         )
 
         update_currently_syncing(state, None)

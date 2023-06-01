@@ -22,10 +22,10 @@ REQUIRED_CONFIG_KEYS = [
 ]
 
 
-def do_discover(client, properties_flag, denest_properties):
+def do_discover(client, properties_flag, denest_properties_config):
 
     LOGGER.info('Starting discover')
-    catalog = discover(client, properties_flag, denest_properties)
+    catalog = discover(client, properties_flag, denest_properties_config)
     json.dump(catalog.to_dict(), sys.stdout, indent=2)
     LOGGER.info('Finished discover')
 
@@ -68,11 +68,13 @@ def main():
 
         config = parsed_args.config
         properties_flag = config.get('select_properties_by_default')
-        denest_properties_flag = config.get('denest_properties', 'true')
-
+        denest_properties_config = {
+            'denest_properties': config.get('denest_properties', 'true'),
+            'denest_properties_snakecase': config.get('denest_properties_snakecase', 'false')
+        }
 
         if parsed_args.discover:
-            do_discover(client, properties_flag, denest_properties_flag)
+            do_discover(client, properties_flag, denest_properties_config)
         elif parsed_args.catalog:
             sync(client=client,
                  config=config,

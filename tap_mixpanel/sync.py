@@ -132,7 +132,8 @@ def sync_endpoint(client, #pylint: disable=too-many-branches
                   days_interval=None,
                   attribution_window=None,
                   export_events=None,
-                  denest_properties_flag=None):
+                  denest_properties_flag=None,
+                  where=None):
 
     # Get endpoint_config fields
     url = endpoint_config.get('url')
@@ -270,6 +271,10 @@ def sync_endpoint(client, #pylint: disable=too-many-branches
                     event = json.dumps([export_events] if isinstance(export_events, str) else export_events)
                     url_encoded = urllib.parse.quote(event)
                     querystring += f'&event={url_encoded}'
+
+                if stream_name == 'export' and where:
+                    url_encoded = urllib.parse.quote(where)
+                    querystring += f'&where={url_encoded}'
 
                 full_url = '{}/{}{}'.format(
                     url,
@@ -546,7 +551,8 @@ def sync(client, config, catalog, state, start_date):
             days_interval=int(config.get('date_window_size', '30')),
             attribution_window=int(config.get('attribution_window', '5')),
             export_events=config.get('export_events'),
-            denest_properties_flag=config.get('denest_properties', 'true')
+            denest_properties_flag=config.get('denest_properties', 'true'),
+            where=config.get('where')
         )
 
         update_currently_syncing(state, None)

@@ -36,6 +36,7 @@ This tap:
 - Transformations: De-nest `properties` to root-level, re-name properties with leading `$...` to `mp_reserved_...`, convert datetimes from project timezone to UTC.
 - Optional parameters
   - `export_events` to export only certain events
+  - `where` to filter events with a [segmentation expression](https://developer.mixpanel.com/reference/segmentation-expressions)
 
 **[engage](https://developer.mixpanel.com/docs/data-export-api#section-engage)**
 - Endpoint: https://mixpanel.com/api/2.0/engage

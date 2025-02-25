@@ -60,7 +60,8 @@ def main():
                         parsed_args.config['username'],
                         parsed_args.config['password'],
                         parsed_args.config['project_id'],
-                        parsed_args.config['user_agent']) as client:
+                        parsed_args.config['user_agent'],
+                        parsed_args.config.get('server')) as client:
 
         state = {}
         if parsed_args.state:

@@ -174,6 +174,9 @@ def sync_endpoint(client, #pylint: disable=too-many-branches
         if not days_interval:
             days_interval = 30
 
+        # from_date/to_date are inclusive, so adjust the interval accordingly
+        days_interval -= 1
+
         last_dttm = strptime_to_utc(last_datetime)
         delta_days = (now_datetime - last_dttm).days
         if delta_days <= attribution_window:
@@ -484,12 +487,10 @@ def sync_endpoint(client, #pylint: disable=too-many-branches
                 if bookmark_query_field_from else ''))
         LOGGER.info('  Total records for date window: {}'.format(date_total))
         # Increment date window
-        start_window = end_window
-        next_end_window = end_window + timedelta(days=days_interval)
-        if next_end_window > now_datetime:
+        start_window = end_window + timedelta(days=1)  # from_date/to_date are inclusive 
+        end_window = start_window + timedelta(days=days_interval)
+        if end_window > now_datetime:
             end_window = now_datetime
-        else:
-            end_window = next_end_window
 
         # Update the state with the max_bookmark_value for the stream
         if bookmark_field:

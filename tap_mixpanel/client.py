@@ -272,6 +272,10 @@ class MixpanelClient(object):
 
         kwargs['headers']['Accept'] = 'application/json'
 
+        # requests automatically decompresses gzip-encoded responses
+        # https://requests.readthedocs.io/en/latest/community/faq/#encoded-data
+        kwargs['headers']['Accept-Encoding'] = 'gzip'
+
         if self.__user_agent:
             kwargs['headers']['User-Agent'] = self.__user_agent
 

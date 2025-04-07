@@ -36,14 +36,6 @@ def main():
     parsed_args = singer.utils.parse_args(REQUIRED_CONFIG_KEYS)
 
     start_date = parsed_args.config['start_date']
-    start_dttm = strptime_to_utc(start_date)
-    now_dttm = utils.now()
-    delta_days = (now_dttm - start_dttm).days
-    if delta_days >= 365:
-        delta_days = 365
-        start_date = strftime(now_dttm - timedelta(days=delta_days))
-        LOGGER.warning("WARNING: start_date greater than 1 year maxiumum for API.")
-        LOGGER.warning("WARNING: Setting start_date to 1 year ago, {}".format(start_date))
 
     #Initialize necessary keys into the dictionary.
     params = parsed_args.config

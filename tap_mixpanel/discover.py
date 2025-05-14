@@ -1,8 +1,8 @@
 from singer.catalog import Catalog, CatalogEntry, Schema
 from tap_mixpanel.schema import get_schemas, STREAMS
 
-def discover(client, properties_flag, denest_properties):
-    schemas, field_metadata = get_schemas(client, properties_flag, denest_properties)
+def discover(client, properties_flag, denest_properties, url):
+    schemas, field_metadata = get_schemas(client, properties_flag, denest_properties, url)
     catalog = Catalog([])
 
     for stream_name, schema_dict in schemas.items():

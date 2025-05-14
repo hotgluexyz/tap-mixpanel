@@ -13,7 +13,7 @@ def get_abs_path(path):
     return os.path.join(os.path.dirname(os.path.realpath(__file__)), path)
 
 
-def get_schema(client, properties_flag, denest_properties_flag, stream_name):
+def get_schema(client, properties_flag, denest_properties_flag, stream_name, url):
     schema_path = get_abs_path('schemas/{}.json'.format(stream_name))
 
     with open(schema_path) as file:
@@ -38,7 +38,7 @@ def get_schema(client, properties_flag, denest_properties_flag, stream_name):
         if stream_name == 'engage':
             properties = client.request(
                 method='GET',
-                url='https://mixpanel.com/api/2.0',
+                url='{}/2.0'.format(url),
                 path='engage/properties',
                 params={'limit': 2000},
                 endpoint='engage_properties')
@@ -96,7 +96,7 @@ def get_schema(client, properties_flag, denest_properties_flag, stream_name):
             #  https://developer.mixpanel.com/docs/data-export-api#section-hr-span-style-font-family-courier-top-span
             results = client.request(
                 method='GET',
-                url='https://mixpanel.com/api/2.0',
+                url='{}/2.0'.format(url),
                 path='events/properties/top',
                 params={'limit': 2000},
                 endpoint='event_properties')
@@ -121,7 +121,7 @@ def get_schema(client, properties_flag, denest_properties_flag, stream_name):
 
     return schema
 
-def get_schemas(client, properties_flag, denest_properties_flag):
+def get_schemas(client, properties_flag, denest_properties_flag, url):
     schemas = {}
     field_metadata = {}
 
@@ -131,7 +131,7 @@ def get_schemas(client, properties_flag, denest_properties_flag):
             LOGGER.warning('Mixpanel returned a 402 indicating the Engage endpoint and stream is unavailable. Skipping.')
             continue
 
-        schema = get_schema(client, properties_flag, denest_properties_flag, stream_name)
+        schema = get_schema(client, properties_flag, denest_properties_flag, stream_name, url)
 
         schemas[stream_name] = schema
         mdata = metadata.new()

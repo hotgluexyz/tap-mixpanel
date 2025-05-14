@@ -17,7 +17,7 @@
 
 STREAMS = {
     'export': {
-        'url': 'https://data.mixpanel.com/api/2.0',
+        'url': "https://data.mixpanel.com/api/2.0",        # making it None so that the base_url is used from client.py
         'path': 'export',
         'data_key': 'results',
         'api_method': 'GET',

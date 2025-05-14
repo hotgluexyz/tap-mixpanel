@@ -10,7 +10,7 @@ from singer.utils import strptime_to_utc, strftime
 from tap_mixpanel.client import MixpanelClient
 from tap_mixpanel.discover import discover
 from tap_mixpanel.sync import sync
-
+from tap_mixpanel.utils import get_standard_host
 LOGGER = singer.get_logger()
 
 REQUIRED_CONFIG_KEYS = [
@@ -22,10 +22,10 @@ REQUIRED_CONFIG_KEYS = [
 ]
 
 
-def do_discover(client, properties_flag, denest_properties):
+def  do_discover(client, properties_flag, denest_properties, url):
 
     LOGGER.info('Starting discover')
-    catalog = discover(client, properties_flag, denest_properties)
+    catalog = discover(client, properties_flag, denest_properties, url)
     json.dump(catalog.to_dict(), sys.stdout, indent=2)
     LOGGER.info('Finished discover')
 
@@ -47,20 +47,37 @@ def main():
 
     #Initialize necessary keys into the dictionary.
     params = parsed_args.config
-    if params.get("username") and params.get("password"):
-        if params.get("project_id") is None:
-            raise Exception("project_id is required for Service User/Password type of authentication")
-        params.update({"api_secret":None})
-    elif params.get("api_secret"):  
-         params.update({"username":None,"password":None,"project_id":None})  
-    else:
-        raise Exception("No API secret OR Username/Password provided.")
+
+    username                = params.get("username")
+    password                = params.get("password")
+    service_account_name    = params.get("service_account_name")
+    service_account_secret  = params.get("service_account_secret")
+    api_secret              = params.get("api_secret")
+    project_id              = params.get("project_id")
+
+    has_basic     = bool(username and password)
+    has_service   = bool(service_account_name and service_account_secret)
+    has_token     = bool(api_secret)
+
+    # Ensure exactly one auth method is specified
+    mode_count = sum([has_basic, has_service, has_token])
+    if mode_count == 0:
+        raise Exception("No credentials provided; supply either username/password, service account, or api_secret.")
+
+    # Enforce project_id where required
+    if (has_basic or has_service) and not project_id:
+        kind = "Username/Password" if has_basic else "Service Account"
+        raise Exception(f"project_id is required for {kind} authentication.")
+
           
-    with MixpanelClient(parsed_args.config['api_secret'],
-                        parsed_args.config['username'],
-                        parsed_args.config['password'],
-                        parsed_args.config['project_id'],
-                        parsed_args.config['user_agent']) as client:
+    with MixpanelClient(parsed_args.config.get('api_secret', None),
+                        parsed_args.config.get('username', None),
+                        parsed_args.config.get('password', None),
+                        parsed_args.config.get('project_id', None),
+                        parsed_args.config.get('user_agent', None),
+                        parsed_args.config.get('service_account_name', None),
+                        parsed_args.config.get('service_account_secret', None),
+                        parsed_args.config.get('data_region', None)) as client:
 
         state = {}
         if parsed_args.state:
@@ -69,10 +86,12 @@ def main():
         config = parsed_args.config
         properties_flag = config.get('select_properties_by_default')
         denest_properties_flag = config.get('denest_properties', 'true')
-
+        data_region = config.get('data_region', None)
+        url = get_standard_host(data_region)
+        
 
         if parsed_args.discover:
-            do_discover(client, properties_flag, denest_properties_flag)
+            do_discover(client, properties_flag, denest_properties_flag, url)
         elif parsed_args.catalog:
             sync(client=client,
                  config=config,

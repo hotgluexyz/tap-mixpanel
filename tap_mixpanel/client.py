@@ -1,17 +1,24 @@
 import base64
 import io
+from typing import Union, Dict, Any, Tuple
 import backoff
 import jsonlines
 import requests
 from requests.exceptions import ConnectionError, HTTPError
 from singer import metrics
 import singer
+from enum import Enum
+from .utils import get_export_host, get_standard_host
 
 LOGGER = singer.get_logger()
 
 BACKOFF_MAX_TRIES_REQUEST = 7
 
 
+class API_TYPES(Enum):
+    QUERY = "query"
+    EXPORT = "export"
+    
 class ReadTimeoutError(Exception):
     pass
 
@@ -50,6 +57,7 @@ class MixpanelForbiddenError(MixpanelError):
 
 class MixpanelInternalServiceError(MixpanelError):
     pass
+
 
 
 ERROR_CODE_EXCEPTION_MAPPING = {
@@ -93,12 +101,16 @@ def raise_for_error(response):
 
 
 class MixpanelClient(object):
+
     def __init__(self,
                  api_secret,
                  username,
                  password,
                  project_id,
-                 user_agent=None):
+                 user_agent=None,
+                 service_account_name=None,
+                 service_account_secret=None,
+                 data_region=None):
         self.__api_secret = api_secret
         self.username = username
         self.password = password
@@ -107,7 +119,9 @@ class MixpanelClient(object):
         self.__verified = False
         self.disable_engage_endpoint = False
         self.project_id = project_id
-        self.basic_auth = False
+        self.service_account_name = service_account_name
+        self.service_account_secret = service_account_secret
+        self.data_region = data_region
 
     def __enter__(self):
         self.__verified = self.check_access()
@@ -116,58 +130,120 @@ class MixpanelClient(object):
     def __exit__(self, exception_type, exception_value, traceback):
         self.__session.close()
 
+    @property
+    def has_basic_auth(self):
+        return bool(self.username and self.password)
 
-    @backoff.on_exception(backoff.expo,
-                          (Server5xxError, MixpanelRateLimitsError, ReadTimeoutError, ConnectionError),
-                          max_tries=5,
-                          factor=2)
-    def check_access(self):
-        basic_auth = self.basic_auth
-        if self.username and self.password:
-            basic_auth = True  
-            self.basic_auth = True
-        elif self.__api_secret is None:
-            raise Exception('Error: Missing api_secret in tap config.json.')
-        headers = {}
-        # Endpoint: simple API call to return a single record (org settings) to test access
-        if basic_auth:
-            url = "https://mixpanel.com/api/app/me"
-        else:    
-            url = 'https://mixpanel.com/api/2.0/engage'
-        LOGGER.info('Checking access by calling {}'.format(url))
-        if self.__user_agent:
-            headers['User-Agent'] = self.__user_agent
-        headers['Accept'] = 'application/json'
+    @property
+    def has_service_account(self):
+        return bool(self.service_account_name and self.service_account_secret)
 
-        if not basic_auth:
-            headers['Authorization'] = 'Basic {}'.format(
-                str(base64.urlsafe_b64encode(self.__api_secret.encode("utf-8")), "utf-8"))
+    @property
+    def has_secret(self):
+        return bool(self.__api_secret)
+    
+    def _apply_auth_and_project(
+        self,
+        params: Union[Dict[str, Any], str, None],
+        kwargs: Dict[str, Any]
+    ) -> Tuple[Union[Dict[str, Any], str], Dict[str, Any]]:
+        
+        # initialize headers/auth if missing
+        kwargs.setdefault('headers', {})
 
-        try:
-            if basic_auth:
-                response = self.__session.get(
-                    url=url,
-                    headers=headers,
-                    auth=(self.username,self.password)
-                    )
+        # 1) Service Account / Basic Auth
+        if self.has_service_account or self.has_basic_auth:
+            # inject project_id
+            if params is None:
+                params = {}
+            if isinstance(params, dict):
+                params['project_id'] = self.project_id
+            elif isinstance(params, str):
+                # Fix: Ensure we don't add double question marks
+                if not params:
+                    params = f"project_id={self.project_id}"
+                elif '?' in params:
+                    params = f"{params}&project_id={self.project_id}"
+                else:
+                    params = f"{params}&project_id={self.project_id}"
+
+            # set auth tuple - prioritize service account over basic auth
+            if self.has_service_account:
+                kwargs['auth'] = (self.service_account_name, self.service_account_secret)
             else:
-                response = self.__session.get(
-                    url=url,
-                    headers=headers)   
-        except requests.exceptions.Timeout as err:
-            LOGGER.error('TIMEOUT ERROR: {}'.format(err))
-            raise ReadTimeoutError
+                kwargs['auth'] = (self.username, self.password)
 
-        if response.status_code == 402:
-            # 402 Payment Requirement does not indicate a permissions or authentication error
-            self.disable_engage_endpoint = True
-            LOGGER.warning('Mixpanel returned a 402 from the Engage API. Engage stream will be skipped.')
-            return True
-        elif response.status_code != 200:
-            LOGGER.error('Error status_code = {}'.format(response.status_code))
-            raise_for_error(response)
+        # 2) API Secret
         else:
+            token = base64.urlsafe_b64encode(
+                self.__api_secret.encode('utf-8')
+            ).decode('utf-8')
+            kwargs['headers']['Authorization'] = f"Basic {token}"
+
+        return params, kwargs
+    
+    @backoff.on_exception(
+        backoff.expo,
+        (Server5xxError, MixpanelRateLimitsError, ReadTimeoutError, ConnectionError),
+        max_tries=5,
+        factor=2
+    )
+    def check_access(self):
+        """
+        Verify Mixpanel API access using one of:
+        - Service account (name/secret) - prioritized if available
+        - Basic auth (username/password)
+        - API secret (base64)
+        Raises if no credentials or on non-200 errors (except 402).
+        """
+        # Determine auth mode
+
+        if not (self.has_service_account or self.has_basic_auth or self.has_secret):
+            raise Exception("Error: Missing credentials (service account, username/password, or api_secret) in tap config.json.")
+
+        # Choose endpoint
+        base_url = self._get_base_url(API_TYPES.QUERY)
+        url = base_url + "/app/me" if (self.has_service_account or self.has_basic_auth) else base_url + "/2.0/engage"
+        LOGGER.info(f"Checking access by calling {url}")
+
+        # Build headers
+        headers = {"Accept": "application/json"}
+        if self.__user_agent:
+            headers["User-Agent"] = self.__user_agent
+
+        # If using API secret (and not service_account/basic), set Authorization header
+        auth = None
+        if self.has_service_account:
+            auth = (self.service_account_name, self.service_account_secret)
+        elif self.has_basic_auth:
+            auth = (self.username, self.password)
+        else:  # using API secret
+            token = base64.urlsafe_b64encode(self.__api_secret.encode()).decode()
+            headers["Authorization"] = f"Basic {token}"
+
+        # Perform request with timeout to catch slow responses
+        try:
+            response = self.__session.get(url, headers=headers, auth=auth, timeout=30)
+        except TimeoutError as err:
+            LOGGER.error(f"TIMEOUT ERROR: {err}")
+            raise ReadTimeoutError
+        except requests.exceptions.RequestException as err:
+            # let backoff decorator handle retries for connection errors, etc.
+            LOGGER.error(f"REQUEST ERROR: {err}")
+            raise
+
+        # Handle Mixpanel's "Payment Required" special case
+        if response.status_code == 402:
+            self.disable_engage_endpoint = True
+            LOGGER.warning("Mixpanel returned 402 from Engage API; skipping Engage stream.")
             return True
+
+        # Any non-200 (other than 402) is an error
+        if response.status_code != 200:
+            LOGGER.error(f"Error status_code = {response.status_code}")
+            raise_for_error(response)
+
+        return True
 
 
     @backoff.on_exception(
@@ -206,10 +282,7 @@ class MixpanelClient(object):
         if not self.__verified:
             self.__verified = self.check_access()
 
-        if url and path:
-            url = '{}/{}'.format(url, path)
-        elif path and not url:
-            url = 'https://mixpanel.com/api/2.0/{}'.format(path)
+        url = '{}/2.0/{}'.format(self._get_base_url(API_TYPES.QUERY), path)
 
         if 'endpoint' in kwargs:
             endpoint = kwargs['endpoint']
@@ -227,18 +300,10 @@ class MixpanelClient(object):
 
         if method == 'POST':
             kwargs['headers']['Content-Type'] = 'application/json'
-        if self.basic_auth:
-            kwargs['auth'] = (self.username,self.password)
-            if params is None:
-                params = {}
-            if isinstance(params,dict):
-                params.update({"project_id":self.project_id})
-            elif isinstance(params,str):
-                params = f"{params}&project_id={self.project_id}" 
-        else:    
-            kwargs['headers']['Authorization'] = 'Basic {}'.format(
-                str(base64.urlsafe_b64encode(self.__api_secret.encode("utf-8")), "utf-8"))
             
+        # Apply authentication and project ID
+        params, kwargs = self._apply_auth_and_project(params, kwargs)
+
         with metrics.http_request_timer(endpoint) as timer:
             response = self.perform_request(method=method,
                                             url=url,
@@ -256,10 +321,7 @@ class MixpanelClient(object):
         if not self.__verified:
             self.__verified = self.check_access()
 
-        if url and path:
-            url = '{}/{}'.format(url, path)
-        elif path and not url:
-            url = 'https://data.mixpanel.com/api/2.0/{}'.format(path)
+        url = '{}/2.0/{}'.format(self._get_base_url(API_TYPES.EXPORT), path)
 
         if 'endpoint' in kwargs:
             endpoint = kwargs['endpoint']
@@ -278,16 +340,9 @@ class MixpanelClient(object):
         if method == 'POST':
             kwargs['headers']['Content-Type'] = 'application/json'
 
-        if self.basic_auth:
-            kwargs['auth'] = (self.username,self.password)
-            if isinstance(params,dict):
-                params.update({"project_id":self.project_id})
-            elif isinstance(params,str):
-                params = f"{params}&project_id={self.project_id}"    
-        else:    
-            kwargs['headers']['Authorization'] = 'Basic {}'.format(
-                str(base64.urlsafe_b64encode(self.__api_secret.encode("utf-8")), "utf-8"))
-            
+        # Apply authentication and project ID
+        params, kwargs = self._apply_auth_and_project(params, kwargs)
+
         with metrics.http_request_timer(endpoint) as timer:
             response = self.perform_request(method=method,
                                         url=url,
@@ -303,3 +358,11 @@ class MixpanelClient(object):
             reader = jsonlines.Reader(response.iter_lines())
             for record in reader.iter(allow_none=True, skip_empty=True):
                 yield record
+
+    def _get_base_url(self, api_type: API_TYPES) -> str:
+        region = (self.data_region or 'default').lower()
+        
+        if api_type == API_TYPES.EXPORT:
+            return get_export_host(region)
+        return get_standard_host(region)
+

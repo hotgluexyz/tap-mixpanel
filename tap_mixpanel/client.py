@@ -202,7 +202,8 @@ class MixpanelClient(object):
             raise Exception("Error: Missing credentials (service account, username/password, or api_secret) in tap config.json.")
 
         # Choose endpoint
-        url = self._get_base_url(API_TYPES.QUERY) + "/app/me" if (self.has_service_account or self.has_basic_auth) else self._get_base_url(API_TYPES.EXPORT) + "/engage"
+        base_url = self._get_base_url(API_TYPES.QUERY)
+        url = base_url + "/app/me" if (self.has_service_account or self.has_basic_auth) else base_url + "/2.0/engage"
         LOGGER.info(f"Checking access by calling {url}")
 
         # Build headers

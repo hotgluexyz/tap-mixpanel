@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 import base64
 import io
+import urllib.parse
+
 import backoff
 import jsonlines
 import requests
+import singer
 from requests.exceptions import ConnectionError, HTTPError
 from singer import metrics
-import singer
 
 LOGGER = singer.get_logger()
 
@@ -98,7 +102,8 @@ class MixpanelClient(object):
                  username,
                  password,
                  project_id,
-                 user_agent=None):
+                 user_agent=None,
+                 server: str | None = None):
         self.__api_secret = api_secret
         self.username = username
         self.password = password
@@ -108,6 +113,7 @@ class MixpanelClient(object):
         self.disable_engage_endpoint = False
         self.project_id = project_id
         self.basic_auth = False
+        self.server = server
 
     def __enter__(self):
         self.__verified = self.check_access()
@@ -143,6 +149,7 @@ class MixpanelClient(object):
             headers['Authorization'] = 'Basic {}'.format(
                 str(base64.urlsafe_b64encode(self.__api_secret.encode("utf-8")), "utf-8"))
 
+        url = self._with_server(url)
         try:
             if basic_auth:
                 response = self.__session.get(
@@ -185,7 +192,7 @@ class MixpanelClient(object):
                         **kwargs):
         try:
             response = self.__session.request(method=method,
-                                          url=url,
+                                          url=self._with_server(url),
                                           params=params,
                                           json=json,
                                           stream=stream,
@@ -303,3 +310,24 @@ class MixpanelClient(object):
             reader = jsonlines.Reader(response.iter_lines())
             for record in reader.iter(allow_none=True, skip_empty=True):
                 yield record
+
+    def _with_server(self, url: str):
+        if not self.server:
+            return url
+
+        result = urllib.parse.urlsplit(url)
+        domain_parts = result.netloc.split(".")[::-1]  # reversed list of host domain parts
+
+        # apply relevant server sub-domain
+        # https://developer.mixpanel.com/reference/overview
+        server = self.server.lower()
+
+        if len(domain_parts) == 2:  # mixpanel.com (com, mixpanel)
+            domain_parts.append(server)  # eu.mixpanel.com (com, mixpanel)
+        elif len(domain_parts) > 2:  # data.mixpanel.com (com, mixpanel, data)
+            domain_parts[2] += f"-{server}"  # data-eu.mixpanel.com (com, mixpanel, data-eu)
+
+        domain_parts.reverse()  # reverse back to correct order
+
+        result = result._replace(netloc=".".join(domain_parts))
+        return result.geturl()

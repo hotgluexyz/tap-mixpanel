@@ -312,7 +312,7 @@ class MixpanelClient(object):
                 yield record
 
     def _with_server(self, url: str):
-        if not self.server:
+        if not self.server or self.server.strip().lower() == "standard":
             return url
 
         result = urllib.parse.urlsplit(url)

@@ -152,15 +152,6 @@ def sync_endpoint(client, #pylint: disable=too-many-branches
     max_bookmark_value = None
     last_datetime = get_bookmark(state, stream_name, start_date)
 
-    #ONLY FOR FUNNELS ENDPOINT check if start_date is greater than 90 days
-    if stream_name == "funnels":
-        last_dt_utc = strptime_to_utc(last_datetime)
-        now= utils.now()
-        delta_days = (now - last_dt_utc).days
-        if delta_days>=90:
-            delta_days = 90
-            last_datetime = strftime(now - timedelta(days=delta_days))
-    #-
     max_bookmark_value = last_datetime
 
     write_schema(catalog, stream_name)
@@ -180,10 +171,6 @@ def sync_endpoint(client, #pylint: disable=too-many-branches
             delta_days = attribution_window
             LOGGER.info("Start bookmark less than {} day attribution window.".format(
                 attribution_window))
-        elif delta_days >= 365:
-            delta_days = 365
-            LOGGER.warning("WARNING: Start date or bookmark greater than 1 year maxiumum.")
-            LOGGER.warning("WARNING: Setting bookmark start to 1 year ago.")
 
         start_window = now_datetime - timedelta(days=delta_days)
         end_window = start_window + timedelta(days=days_interval)
@@ -211,8 +198,6 @@ def sync_endpoint(client, #pylint: disable=too-many-branches
 
         if bookmark_query_field_from and bookmark_query_field_to:
             # Request dates need to be normalized to project timezone or else errors may occur
-            # Errors occur when from_date is > 365 days ago
-            #   and when to_date > today (in project timezone)
             from_date = '{}'.format(start_window.astimezone(tzone))[0:10]
             to_date = '{}'.format(end_window.astimezone(tzone))[0:10]
             LOGGER.info('START Sync for Stream: {}{}'.format(

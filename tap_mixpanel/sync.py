@@ -198,8 +198,6 @@ def sync_endpoint(client, #pylint: disable=too-many-branches
 
         if bookmark_query_field_from and bookmark_query_field_to:
             # Request dates need to be normalized to project timezone or else errors may occur
-            # Note: The Mixpanel API may have its own date range limitations
-            #   and when to_date > today (in project timezone)
             from_date = '{}'.format(start_window.astimezone(tzone))[0:10]
             to_date = '{}'.format(end_window.astimezone(tzone))[0:10]
             LOGGER.info('START Sync for Stream: {}{}'.format(

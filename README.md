@@ -1,12 +1,9 @@
-# pipelinewise-tap-mixpanel
+# Tap-Mixpanel
 
-[![PyPI version](https://badge.fury.io/py/pipelinewise-tap-mixpanel.svg)](https://badge.fury.io/py/pipelinewise-tap-mixpanel)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pipelinewise-tap-mixpanel.svg)](https://pypi.org/project/pipelinewise-tap-mixpanel/)
 [![License: AGPL](https://img.shields.io/badge/License-AGPLv3-yellow.svg)](https://opensource.org/licenses/AGPL-3.0)
 
-[Singer](https://www.singer.io/) tap that extracts data from a [Mixpanel API](https://developer.mixpanel.com/reference/overview) and produces JSON-formatted data following the [Singer spec](https://github.com/singer-io/getting-started/blob/master/docs/SPEC.md).
-
-This is a [PipelineWise](https://transferwise.github.io/pipelinewise) compatible tap connector.
+**tap-mixpanel** is a Singer Tap capable of syncing data from Mixpanel. 
+**tap-mixpanel** can be run on [hotglue](https://hotglue.com), an embedded integration platform for running Singer Taps and Targets.
 
 This tap:
 

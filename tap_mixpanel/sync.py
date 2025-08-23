@@ -180,10 +180,6 @@ def sync_endpoint(client, #pylint: disable=too-many-branches
             delta_days = attribution_window
             LOGGER.info("Start bookmark less than {} day attribution window.".format(
                 attribution_window))
-        elif delta_days >= 365:
-            delta_days = 365
-            LOGGER.warning("WARNING: Start date or bookmark greater than 1 year maxiumum.")
-            LOGGER.warning("WARNING: Setting bookmark start to 1 year ago.")
 
         start_window = now_datetime - timedelta(days=delta_days)
         end_window = start_window + timedelta(days=days_interval)
